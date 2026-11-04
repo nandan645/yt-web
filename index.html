@@ -35,7 +35,9 @@ header h1{font-size:18px;margin:0;letter-spacing:-.01em}
 .sw{display:flex;align-items:center;gap:12px;background:var(--soft);border-radius:8px;padding:10px 12px;cursor:pointer;margin:8px 0 0}
 .sw .txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;font-size:13px}
 .sw small{color:var(--mut);font-size:12.5px}
-.sw input{position:absolute;opacity:0;pointer-events:none}
+.sw input[type=checkbox]{position:absolute;opacity:0;pointer-events:none}
+.sw .num{flex:none;width:64px;font:inherit;text-align:center;color:inherit;background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:5px 6px;outline:none}
+.sw .num:focus{border-color:var(--acc)}
 .sw i{flex:none;width:38px;height:22px;border-radius:99px;background:var(--bd);position:relative;transition:background .15s}
 .sw i::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform .15s}
 .sw input:checked+i{background:var(--ok)}
@@ -121,7 +123,7 @@ textarea:focus{border-color:var(--acc);background:var(--card)}
 .s-done{color:var(--ok);background:color-mix(in srgb,var(--ok) 12%,transparent)}
 .s-running{color:var(--blue);background:color-mix(in srgb,var(--blue) 12%,transparent)}
 .s-running::before{animation:pulse 1.2s infinite}
-.s-queued,.s-interrupted{color:var(--warn);background:color-mix(in srgb,var(--warn) 12%,transparent)}
+.s-queued,.s-interrupted,.s-retrying{color:var(--warn);background:color-mix(in srgb,var(--warn) 12%,transparent)}
 .s-error,.s-cancelled{color:var(--err);background:color-mix(in srgb,var(--err) 12%,transparent)}
 @keyframes pulse{50%{opacity:.3}}
 .prog{height:6px;border-radius:99px;background:var(--soft);overflow:hidden}
@@ -179,6 +181,10 @@ pre{margin:4px 0 0;white-space:pre-wrap;word-break:break-all;font:11.5px/1.5 ui-
   <label class="sw">
     <span class="txt"><b>Force IPv4</b><small>Run yt-dlp with <code>-4</code>. Helps when IPv6 is slow or blocked by YouTube. Applies to new and retried downloads.</small></span>
     <input type="checkbox" id="ipv4"><i></i>
+  </label>
+  <label class="sw">
+    <span class="txt"><b>Automatic retries</b><small>Retry a failed download right away, up to this many times. Errors like private/removed videos or the bot check aren’t retried. 0 turns it off.</small></span>
+    <input type="number" id="retries" min="0" max="10" class="num">
   </label>
   <hr>
   <h2>YouTube cookies</h2>
@@ -261,7 +267,7 @@ const size=n=>{for(const u of["B","KB","MB","GB"]){if(n<1024)return(u=="B"?n:n.t
 const ago=t=>{const s=Date.now()/1000-t;return s<60?"just now":s<3600?Math.floor(s/60)+"m ago":s<86400?Math.floor(s/3600)+"h ago":new Date(t*1000).toLocaleDateString()};
 const host=u=>{try{return new URL(u).hostname.replace(/^www\./,"")}catch(e){return u}};
 const icon=n=>`<svg><use href="#i-${n}"/></svg>`;
-const ACTIVE=["running","queued","interrupted"],FAILED=["error","cancelled"];
+const ACTIVE=["running","queued","interrupted","retrying"],FAILED=["error","cancelled"];
 let jobs=[],filter="all",timer,ck={set:false};const openLogs=new Set(),logs={},confirming=new Set();
 
 // --- composer ---
@@ -321,12 +327,14 @@ function parseProg(p){ // "[dl]  42.1% of  118.62MiB at  8.53MiB/s ETA 00:09"
 function card(j){
   const thumb=j.files.find(f=>IMG.test(f.name)),media=j.files.find(f=>VID.test(f.name)||AUD.test(f.name));
   const ph=j.opts.format in{audio:1,mp3:1,m4a:1,opus:1,wav:1}?"aud":j.opts.format=="none"?"doc":"vid";
-  const active=j.status=="running"||j.status=="queued";
+  const active=j.status=="running"||j.status=="queued"||j.status=="retrying";
   const p=j.status=="running"&&parseProg(j.progress);
   let prog="";
   if(j.status=="running")prog=p?`<div class="prog"><i style="width:${p.pct}%"></i></div><div class="stat">${p.pct.toFixed(1)}%${p.txt?" · "+esc(p.txt):""}</div>`
     :`<div class="prog ind"><i></i></div><div class="stat">${esc((j.progress||"Starting…").replace(/^\[\w+\]\s*/,""))}</div>`;
   else if(j.status=="queued")prog=`<div class="stat">Waiting for a free slot…</div>`;
+  else if(j.status=="retrying"){const r=j.retry,s=Math.max(0,Math.round(r.at-Date.now()/1000));
+    prog=`<div class="stat">Retrying ${s?`in ${s<60?s+"s":Math.ceil(s/60)+"m"}`:"now"} · attempt ${r.attempt} of ${r.max}</div><div class="stat err">${esc(j.progress)}</div>`}
   else if(j.status=="error")prog=`<div class="stat err">${esc(j.progress)}</div>`+
     (/cookies|not a bot|sign in|logged-in/i.test(j.progress)?`<div><button class="btn" data-a="cookies">${icon("set")}${ck.set?"Update cookies":"Add cookies"}</button></div>`:"");
   const files=j.files.map(f=>{const ext=f.name.split(".").pop().toUpperCase().slice(0,5);
@@ -343,7 +351,7 @@ function card(j){
       <button class="btn ghost" data-a="keep">Keep</button>
       <button class="btn danger" data-a="delete">Delete</button>
     </div>`:`<div class="acts">
-      ${active?`<button class="btn" data-a="cancel">${icon("x")}Cancel</button>`
+      ${active?`<button class="btn" data-a="cancel">${icon("x")}Cancel</button>${j.status=="retrying"?`<button class="btn" data-a="retry">${icon("re")}Retry now</button>`:""}`
         :j.status=="done"&&j.files.length?`<button class="btn go" data-a="dl">${icon("dl")}Download</button>`
         :`<button class="btn" data-a="retry">${icon("re")}Retry</button>`}
       <span class="sp"></span>
@@ -375,14 +383,16 @@ function render(){
     prev=el;
   }
 }
+let seq=0;
 async function refresh(){
-  clearTimeout(timer);
-  try{jobs=await (await fetch("/api/jobs")).json()}catch(e){}
+  clearTimeout(timer);const my=++seq;
+  try{const r=await fetch("/api/jobs");if(r.ok){const d=await r.json();if(my!==seq)return;jobs=d}}catch(e){}
+  if(my!==seq)return; // a newer refresh started meanwhile; let it win
   await Promise.all([...openLogs].filter(id=>jobs.some(j=>j.id==id)).map(async id=>{
     try{logs[id]=await (await fetch(`/api/jobs/${id}/log`)).text()}catch(e){}}));
   render();
-  const busy=jobs.some(j=>j.status=="running"||j.status=="queued");
-  if(!document.hidden)timer=setTimeout(refresh,busy?1500:10000);
+  const busy=jobs.some(j=>ACTIVE.includes(j.status));
+  if(!document.hidden&&my===seq)timer=setTimeout(refresh,busy?1500:10000);
 }
 document.addEventListener("keydown",e=>{if(e.key=="Escape"&&confirming.size){confirming.clear();render()}});
 document.addEventListener("visibilitychange",()=>{if(!document.hidden)refresh()});
@@ -397,10 +407,13 @@ function showCookies(c){
   const d=$("ckDel");if(d)d.onclick=async()=>{showCookies(await (await fetch("/api/cookies",{method:"DELETE"})).json());ckMsg("Removed","ok");render()};
 }
 const ckMsg=(t,c="")=>{const m=$("ckMsg");m.textContent=t;m.className="msg "+c};
-async function loadSettings(){try{$("ipv4").checked=(await (await fetch("/api/settings")).json()).ipv4}catch(e){}}
-$("ipv4").onchange=async e=>{
-  try{const r=await fetch("/api/settings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({ipv4:e.target.checked})});
-    e.target.checked=(await r.json()).ipv4}catch(err){e.target.checked=!e.target.checked}};
+const showSettings=s=>{$("ipv4").checked=s.ipv4;$("retries").value=s.retries};
+async function loadSettings(){try{showSettings(await (await fetch("/api/settings")).json())}catch(e){}}
+async function saveSetting(k,v){
+  try{const r=await fetch("/api/settings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({[k]:v})});
+    showSettings(await r.json());refresh()}catch(e){loadSettings()}}
+$("ipv4").onchange=e=>saveSetting("ipv4",e.target.checked);
+$("retries").onchange=e=>saveSetting("retries",Math.max(0,Math.min(10,parseInt(e.target.value)||0)));
 async function loadCookies(){try{showCookies(await (await fetch("/api/cookies")).json())}catch(e){}}
 $("ckFile").onchange=async e=>{const f=e.target.files[0];if(!f)return;
   if(f.size>5e6)return ckMsg("File too large (max 5 MB)","err");

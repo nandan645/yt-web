@@ -17,9 +17,15 @@ BIN = os.path.dirname(sys.executable)  # venv bin: yt-dlp, deno, ffmpeg
 # Netscape cookies.txt used for every job (e.g. to pass YouTube's bot check). Never served over HTTP.
 COOKIES = os.path.abspath(os.environ.get("COOKIES_FILE", os.path.join(HERE, "cookies.txt")))
 SETTINGS = os.path.abspath(os.environ.get("SETTINGS_FILE", os.path.join(HERE, "settings.json")))
-DEFAULTS = {"ipv4": True}  # force IPv4 (-4): many hosts have flaky/blocked IPv6 to YouTube
+DEFAULTS = {"ipv4": True,  # force IPv4 (-4): many hosts have flaky/blocked IPv6 to YouTube
+            "retries": 3}  # automatic retries for a failed job (0 = off)
+# Errors that retrying won't fix: give up immediately instead of hammering the site.
+PERMANENT = re.compile(r"Unsupported URL|is not a valid URL|Video unavailable|Private video|"
+                       r"has been removed|members-only|Join this channel|confirm your age|"
+                       r"not a bot|Requested format is not available|HTTP Error 404|"
+                       r"No video formats found|only works when logged-in", re.I)
 JOB_COOKIES = ".cookies.txt"  # per-job private copy; yt-dlp rewrites it, removed when the job ends
-INTERNAL = {"job.json", "log.txt", "rc", "pid", "cancelled", "title.txt"}
+INTERNAL = {"job.json", "log.txt", "rc", "pid", "cancelled", "title.txt", "attempts", "noretry"}
 PARTIAL = re.compile(r"\.(part|ytdl|temp)$|\.part-Frag\d+|\.f\d+\.\w+$")
 ID_RE = re.compile(r"^[0-9a-f]{12}$")
 LANGS_RE = re.compile(r"^[\w.,*\-]{1,100}$")
@@ -89,10 +95,36 @@ def cookies_info():
             "updated": os.path.getmtime(COOKIES)}
 
 
+_settings = None
+
+
 def get_settings():
-    try: saved = json.loads(read(SETTINGS) or "{}")
-    except ValueError: saved = {}
-    return {k: type(v)(saved.get(k, v)) for k, v in DEFAULTS.items()}
+    global _settings
+    if _settings is None:
+        try: saved = json.loads(read(SETTINGS) or "{}")
+        except ValueError: saved = {}
+        _settings = {k: type(v)(saved.get(k, v)) for k, v in DEFAULTS.items()}
+    return dict(_settings)
+
+
+def save_settings(new):
+    global _settings
+    write_private(SETTINGS, json.dumps(new)); _settings = dict(new)
+
+
+def retry_delay(n):  # no wait: flaky sites often succeed on an immediate retry
+    return 0
+
+
+def retry_info(jid):
+    """(next_attempt, max, retry_at) if this failed job will be retried automatically, else None."""
+    d = jdir(jid)
+    if os.path.exists(os.path.join(d, "noretry")): return None
+    tries, mx = int(read(os.path.join(d, "attempts")) or 0), get_settings()["retries"]
+    if tries >= mx: return None
+    try: failed_at = os.path.getmtime(os.path.join(d, "rc"))
+    except OSError: return None
+    return tries + 1, mx, failed_at + retry_delay(tries)
 
 
 def write_private(path, text):
@@ -120,9 +152,18 @@ def status(jid):
     d = jdir(jid)
     if os.path.exists(os.path.join(d, "cancelled")): return "cancelled"
     rc = read(os.path.join(d, "rc"))
-    if rc is not None: return "done" if rc.strip() == "0" else "error"
+    if rc is not None:
+        if rc.strip() == "0": return "done"
+        return "retrying" if retry_info(jid) else "error"
     if not os.path.exists(os.path.join(d, "pid")): return "queued"
     return "running" if pid_alive(jid) else "interrupted"
+
+
+def read_tail(path, n=6000):
+    try:
+        with open(path, "rb") as f:
+            f.seek(max(0, os.path.getsize(path) - n)); return f.read().decode("utf-8", "replace")
+    except OSError: return ""
 
 
 def last_line(path, n=4096):
@@ -148,7 +189,8 @@ def job_info(jid):
     return {"id": jid, "url": meta.get("url"), "opts": meta.get("opts", {}),
             "created": meta.get("created", 0), "status": st,
             "title": titles[0] if titles else None, "count": len(titles),
-            "progress": line if st in ("running", "error", "interrupted") else "",
+            "progress": line if st in ("running", "error", "interrupted", "retrying") else "",
+            "retry": dict(zip(("attempt", "max", "at"), retry_info(jid))) if st == "retrying" else None,
             "files": files}
 
 
@@ -188,7 +230,21 @@ def scheduler():
                 for i, s in sts.items():  # killed by reboot etc. -> requeue (yt-dlp resumes .part)
                     if s == "interrupted":
                         os.remove(os.path.join(jdir(i), "pid")); sts[i] = "queued"
-                    if s in ("done", "error", "cancelled", "interrupted"):  # e.g. cancelled before sh's rm ran
+                    if s == "retrying":
+                        d = jdir(i)
+                        if PERMANENT.search(read_tail(os.path.join(d, "log.txt"))):
+                            open(os.path.join(d, "noretry"), "w").close(); sts[i] = "error"
+                        else:
+                            n, mx, at = retry_info(i)
+                            if time.time() >= at:
+                                with open(os.path.join(d, "attempts"), "w") as f: f.write(str(n))
+                                with open(os.path.join(d, "log.txt"), "a") as f:
+                                    f.write(f"\n--- automatic retry {n}/{mx} ---\n")
+                                for x in ("rc", "pid"):
+                                    try: os.remove(os.path.join(d, x))
+                                    except OSError: pass
+                                sts[i] = "queued"
+                    if s in ("done", "error", "retrying", "cancelled", "interrupted"):  # e.g. cancelled before sh's rm ran
                         try: os.remove(os.path.join(jdir(i), JOB_COOKIES))
                         except OSError: pass
                 free = MAX_JOBS - sum(s == "running" for s in sts.values())
@@ -296,11 +352,22 @@ class H(BaseHTTPRequestHandler):
                     if not chunk: break
                     self.wfile.write(chunk); left -= len(chunk)
 
-    def body(self, limit=100_000):
+    def drain(self, limit=5_000_000):
+        """Read the whole request body up front. Leaving any of it unread would corrupt
+        the next request on the same keep-alive connection."""
         n = int(self.headers.get("Content-Length") or 0)
-        return json.loads(self.rfile.read(n) or b"{}") if n <= limit else {}
+        if n > limit:
+            self.close_connection = True; self._raw = b""
+        else:
+            self._raw = self.rfile.read(n) if n else b""
+
+    def body(self, limit=100_000):
+        raw = getattr(self, "_raw", b"")
+        try: return json.loads(raw) if raw and len(raw) <= limit else {}
+        except ValueError: return {}
 
     def do_POST(self):
+        self.drain()
         r = self.route()
         if not r: return self.send(404, {"error": "not found"})
         _, p = r
@@ -310,8 +377,9 @@ class H(BaseHTTPRequestHandler):
         if p == ["api", "settings"]:
             new = get_settings()
             for k, v in self.body().items():
-                if k in DEFAULTS and isinstance(v, type(DEFAULTS[k])): new[k] = v
-            write_private(SETTINGS, json.dumps(new))
+                if k in DEFAULTS and type(v) is type(DEFAULTS[k]): new[k] = v
+            new["retries"] = max(0, min(10, new["retries"]))
+            save_settings(new)
             return self.send(200, new)
         if p == ["api", "cookies"]:
             text = str(self.body(5_000_000).get("text", "")).replace("\r\n", "\n")
@@ -341,7 +409,7 @@ class H(BaseHTTPRequestHandler):
                     cancel(jid)
                 elif p[3] == "retry":
                     if status(jid) == "running": return self.send(409, {"error": "running"})
-                    for n in ("rc", "pid", "cancelled"):
+                    for n in ("rc", "pid", "cancelled", "attempts", "noretry"):
                         try: os.remove(os.path.join(jdir(jid), n))
                         except OSError: pass
                     with open(os.path.join(jdir(jid), "log.txt"), "a") as f: f.write("\n--- retry ---\n")
@@ -350,6 +418,7 @@ class H(BaseHTTPRequestHandler):
         self.send(404, {"error": "not found"})
 
     def do_DELETE(self):
+        self.drain()
         r = self.route()
         if not r: return self.send(404, {"error": "not found"})
         _, p = r
