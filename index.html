@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>yt-web</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%23e11d48'/%3E%3Cpath d='M12 6v9m-4-4 4 4 4-4M7 18h10' stroke='%23fff' stroke-width='2.2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#f5f5f7;--card:#fff;--fg:#18181b;--mut:#71717a;--bd:#e4e4e7;--soft:#f4f4f5;
+  --acc:#e11d48;--acc-fg:#fff;--blue:#2563eb;--ok:#16a34a;--err:#dc2626;--warn:#d97706;
+  --sh:0 1px 2px rgba(0,0,0,.04),0 2px 8px rgba(0,0,0,.04);--r:12px;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#0c0c0e;--card:#17171a;--fg:#f4f4f5;--mut:#a1a1aa;--bd:#27272a;--soft:#202024;
+  --acc:#f43f5e;--blue:#60a5fa;--ok:#4ade80;--err:#f87171;--warn:#fbbf24;--sh:none}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
+main{max-width:820px;margin:0 auto;padding:28px 16px 60px}
+svg{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+header{display:flex;align-items:center;gap:10px;margin-bottom:18px}
+.logo{width:30px;height:30px;border-radius:8px;background:var(--acc);color:#fff;display:grid;place-items:center}
+.logo svg{width:18px;height:18px;stroke-width:2.4}
+header h1{font-size:18px;margin:0;letter-spacing:-.01em}
+#stats{margin-left:auto;color:var(--mut);font-size:13px}
+#setBtn{position:relative}
+#setBtn.on::after{content:"";position:absolute;top:5px;right:5px;width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 2px var(--bg)}
+.settings{padding:14px;margin-bottom:12px;animation:in .15s ease}
+.settings[hidden]{display:none}
+.settings h2{font-size:14px;margin:0 0 4px;display:flex;align-items:center;gap:8px}
+.settings p{margin:0 0 10px;color:var(--mut);font-size:13px}
+.settings a{color:var(--acc)}
+.ck{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--soft);border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:13px}
+.ck .dot{width:8px;height:8px;border-radius:50%;background:var(--mut);flex:none}
+.ck.on .dot{background:var(--ok)}
+.ck .txt{flex:1;min-width:0}
+.ck small{color:var(--mut)}
+#ckPaste{width:100%;min-height:70px;font:12px/1.4 ui-monospace,monospace;color:inherit;background:var(--soft);border:1px solid var(--bd);border-radius:8px;padding:8px;resize:vertical;outline:none}
+#ckPaste:focus{border-color:var(--acc)}
+.ckacts{display:flex;gap:8px;margin-top:8px;align-items:center;flex-wrap:wrap}
+.ckacts .msg{font-size:13px;color:var(--mut)}
+.ckacts .msg.err{color:var(--err)}
+.ckacts .msg.ok{color:var(--ok)}
+.tips{margin:10px 0 0;padding-left:18px;color:var(--mut);font-size:12.5px}
+.tips li{margin:2px 0}
+
+.card{background:var(--card);border:1px solid var(--bd);border-radius:var(--r);box-shadow:var(--sh)}
+.composer{padding:14px}
+.inrow{display:flex;gap:10px;align-items:flex-start}
+textarea{flex:1;min-width:0;font:inherit;color:inherit;background:var(--soft);border:1px solid transparent;border-radius:10px;padding:11px 12px;resize:none;height:44px;max-height:180px;overflow-y:hidden;scrollbar-width:thin;line-height:20px;outline:none;transition:border-color .15s,background .15s}
+textarea:focus{border-color:var(--acc);background:var(--card)}
+.btn{display:inline-flex;align-items:center;gap:6px;font:inherit;font-weight:500;color:inherit;background:var(--soft);border:1px solid var(--bd);border-radius:8px;padding:6px 11px;cursor:pointer;white-space:nowrap;transition:background .15s,border-color .15s,opacity .15s}
+.btn:hover{border-color:var(--mut)}
+.btn.pri{background:var(--acc);border-color:var(--acc);color:var(--acc-fg);height:44px;padding:0 18px;border-radius:10px}
+.btn.pri:hover{opacity:.9}
+.btn.go{background:var(--fg);border-color:var(--fg);color:var(--bg)}
+.btn.ghost{background:none;border-color:transparent;color:var(--mut);padding:6px 8px}
+.btn.ghost:hover{color:var(--fg);background:var(--soft)}
+.btn.ghost.del:hover{color:var(--err)}
+
+.opts{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px}
+.opts.main{flex-wrap:nowrap}
+.opts.main>*{flex:1 1 0;min-width:0}
+/* Format and Options toggles share one look */
+.dd{position:relative;width:100%;height:36px;justify-content:flex-start;gap:6px;font-weight:500;color:var(--fg);background:var(--soft);border:1px solid var(--bd);border-radius:999px;padding:0 30px 0 12px;overflow:hidden}
+.dd:hover,.dd[aria-expanded=true]{border-color:var(--mut)}
+.dd span{overflow:hidden;text-overflow:ellipsis}
+#moreBtn b{font-size:11px;font-weight:600;background:var(--acc);color:#fff;border-radius:999px;padding:0 6px;line-height:17px}
+#moreBtn b:empty{display:none}
+.chev{position:absolute;right:12px;top:50%;width:6px;height:6px;border:solid var(--mut);border-width:0 1.5px 1.5px 0;transform:translateY(-70%) rotate(45deg);transition:transform .15s}
+.dd[aria-expanded=true] .chev{transform:translateY(-20%) rotate(-135deg)}
+.more{padding-top:12px;margin-top:12px;border-top:1px solid var(--bd)}
+.more[hidden]{display:none}
+.grp{display:flex;flex-wrap:wrap;gap:8px;align-items:center;width:100%}
+.grp+.grp{margin-top:2px}
+.grp>small{width:68px;color:var(--mut);font-size:12px}
+.chip{position:relative;display:inline-flex}
+.chip input{position:absolute;opacity:0;pointer-events:none}
+.chip span{border:1px solid var(--bd);border-radius:999px;padding:5px 12px;cursor:pointer;color:var(--mut);user-select:none;transition:all .15s}
+.chip span:hover{color:var(--fg)}
+.chip input:checked+span{background:color-mix(in srgb,var(--acc) 12%,transparent);border-color:color-mix(in srgb,var(--acc) 45%,transparent);color:var(--acc)}
+.chip input:focus-visible+span{outline:2px solid var(--acc);outline-offset:1px}
+#langs{font:inherit;color:inherit;width:84px;background:var(--soft);border:1px solid var(--bd);border-radius:999px;padding:5px 12px;outline:none}
+#langs:focus{border-color:var(--acc)}
+#langwrap[hidden]{display:none}
+#err{color:var(--err);font-size:13px;margin-top:8px}
+#err:empty{display:none}
+
+.bar{display:flex;align-items:center;gap:8px;margin:22px 2px 10px}
+.tabs{display:flex;gap:2px;background:var(--soft);border:1px solid var(--bd);border-radius:999px;padding:2px}
+.tabs button{font:inherit;font-size:13px;color:var(--mut);background:none;border:0;border-radius:999px;padding:3px 12px;cursor:pointer}
+.tabs button.on{background:var(--card);color:var(--fg);box-shadow:var(--sh)}
+.tabs b{font-weight:500;opacity:.6;margin-left:3px}
+
+#jobs{display:flex;flex-direction:column;gap:10px}
+.job{display:flex;gap:14px;padding:12px;animation:in .2s ease}
+@keyframes in{from{opacity:0;transform:translateY(4px)}}
+.thumb{width:132px;aspect-ratio:16/9;flex:none;border-radius:8px;background:var(--soft) center/cover no-repeat;display:grid;place-items:center;color:var(--mut);overflow:hidden}
+.thumb svg{width:26px;height:26px;stroke-width:1.5;opacity:.6}
+.body{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+.head{display:flex;gap:10px;align-items:flex-start}
+.title{font-weight:600;line-height:1.35;flex:1;min-width:0;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word}
+.title.pending{color:var(--mut);font-weight:500}
+.meta{color:var(--mut);font-size:12.5px;display:flex;flex-wrap:wrap;gap:4px 10px}
+.meta a{color:inherit;text-decoration:none;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.meta a:hover{color:var(--fg)}
+.pill{font-size:11.5px;font-weight:600;border-radius:999px;padding:2px 9px;white-space:nowrap;display:inline-flex;align-items:center;gap:5px}
+.pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.s-done{color:var(--ok);background:color-mix(in srgb,var(--ok) 12%,transparent)}
+.s-running{color:var(--blue);background:color-mix(in srgb,var(--blue) 12%,transparent)}
+.s-running::before{animation:pulse 1.2s infinite}
+.s-queued,.s-interrupted{color:var(--warn);background:color-mix(in srgb,var(--warn) 12%,transparent)}
+.s-error,.s-cancelled{color:var(--err);background:color-mix(in srgb,var(--err) 12%,transparent)}
+@keyframes pulse{50%{opacity:.3}}
+.prog{height:6px;border-radius:99px;background:var(--soft);overflow:hidden}
+.prog i{display:block;height:100%;background:var(--blue);border-radius:99px;transition:width .6s ease}
+.prog.ind i{width:30%!important;animation:ind 1.2s ease-in-out infinite}
+@keyframes ind{from{transform:translateX(-100%)}to{transform:translateX(340%)}}
+.stat{font-size:12px;color:var(--mut);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stat.err{color:var(--err);white-space:normal;word-break:break-word}
+.files{display:flex;flex-wrap:wrap;gap:6px}
+.file{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--fg);text-decoration:none;background:var(--soft);border:1px solid var(--bd);border-radius:6px;padding:2px 8px 2px 3px;max-width:100%}
+.file:hover{border-color:var(--mut)}
+.file b{font-size:10px;font-weight:700;letter-spacing:.03em;border-radius:4px;padding:1px 5px;background:var(--card);color:var(--mut)}
+.file small{color:var(--mut)}
+.acts{display:flex;gap:4px;align-items:center;margin-top:2px}
+.acts .sp{flex:1}
+.acts.confirm{background:color-mix(in srgb,var(--err) 8%,transparent);border-radius:8px;padding:4px 4px 4px 10px;animation:in .15s ease}
+.acts .q{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--err)}
+.btn.danger{background:var(--err);border-color:var(--err);color:#fff}
+.btn.danger:hover{opacity:.9}
+.job.gone{opacity:.4;pointer-events:none;transition:opacity .2s}
+pre{margin:4px 0 0;white-space:pre-wrap;word-break:break-all;font:11.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;max-height:260px;overflow:auto;background:var(--soft);border-radius:8px;padding:10px;color:var(--mut)}
+.empty{text-align:center;color:var(--mut);padding:48px 16px;border:1px dashed var(--bd);border-radius:var(--r)}
+.empty svg{width:28px;height:28px;stroke-width:1.5;margin-bottom:6px}
+
+@media (max-width:560px){
+  .inrow{flex-direction:column;align-items:stretch}textarea{flex:none;width:100%}.btn.pri{width:100%;justify-content:center}
+  .job{flex-direction:column}.thumb{width:100%}
+  #stats{display:none}
+  #setBtn{margin-left:auto}
+}
+</style>
+</head>
+<body>
+<svg style="display:none" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-dl" viewBox="0 0 24 24"><path d="M12 4v11m-5-5 5 5 5-5M5 20h14"/></symbol>
+  <symbol id="i-set" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-re" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15.5-6.3L21 8M21 3v5h-5M21 12a9 9 0 0 1-15.5 6.3L3 16m0 5v-5h5"/></symbol>
+  <symbol id="i-log" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></symbol>
+  <symbol id="i-del" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6m4-6v6M6 7l1 13h10l1-13M9 7V4h6v3"/></symbol>
+  <symbol id="i-vid" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m10 9 5 3-5 3z"/></symbol>
+  <symbol id="i-aud" viewBox="0 0 24 24"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></symbol>
+  <symbol id="i-doc" viewBox="0 0 24 24"><path d="M14 3H6v18h12V7zM14 3v4h4M9 13h6M9 17h6"/></symbol>
+</svg>
+<main>
+<header>
+  <div class="logo"><svg><use href="#i-dl"/></svg></div>
+  <h1>yt-web</h1>
+  <span id="stats"></span>
+  <button type="button" class="btn ghost" id="setBtn" title="Settings" aria-expanded="false" aria-controls="settings"><svg><use href="#i-set"/></svg></button>
+</header>
+
+<section class="card settings" id="settings" hidden>
+  <h2>YouTube cookies</h2>
+  <p>If YouTube says “Sign in to confirm you’re not a bot”, upload a <code>cookies.txt</code> from a logged-in browser. Every download will use it.</p>
+  <div class="ck" id="ckStatus"><span class="dot"></span><span class="txt">Checking…</span></div>
+  <textarea id="ckPaste" placeholder="Paste cookies.txt contents here, or choose a file below" spellcheck="false"></textarea>
+  <div class="ckacts">
+    <label class="btn"><input type="file" id="ckFile" accept=".txt,text/plain" hidden>Choose file…</label>
+    <button type="button" class="btn go" id="ckSave">Save cookies</button>
+    <span class="msg" id="ckMsg"></span>
+  </div>
+  <ul class="tips">
+    <li>Use a private/incognito window: log in to YouTube, open <code>youtube.com/robots.txt</code>, export cookies with a cookies.txt extension, then close the window (this keeps the cookies from being rotated).</li>
+    <li>A spare Google account is safer — accounts used with downloaders can get flagged.</li>
+    <li>Stored only on this machine, readable only by you, and never sent back to the page. <a href="https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies" target="_blank" rel="noreferrer">yt-dlp guide</a></li>
+  </ul>
+</section>
+
+<form class="card composer" id="f">
+  <div class="inrow">
+    <textarea id="url" rows="1" placeholder="Paste links, one per line" required autofocus></textarea>
+    <button class="btn pri"><svg><use href="#i-dl"/></svg>Download</button>
+  </div>
+  <div class="opts main">
+    <input type="hidden" id="format" value="best">
+    <button type="button" class="btn dd" id="fmtBtn" aria-expanded="false" aria-controls="fmtPanel"><span id="fmtLabel">Best quality</span><i class="chev"></i></button>
+    <button type="button" class="btn dd" id="moreBtn" aria-expanded="false" aria-controls="more"><span>Options</span><b id="ocount"></b><i class="chev"></i></button>
+  </div>
+  <div class="opts more" id="fmtPanel" hidden>
+    <div class="grp"><small>Video</small>
+      <label class="chip"><input type="radio" name="fmt" value="best"><span>Best quality</span></label>
+      <label class="chip"><input type="radio" name="fmt" value="mp4"><span>MP4 · best</span></label>
+      <label class="chip"><input type="radio" name="fmt" value="2160"><span>4K</span></label>
+      <label class="chip"><input type="radio" name="fmt" value="1440"><span>1440p</span></label>
+      <label class="chip"><input type="radio" name="fmt" value="1080"><span>1080p</span></label>
+      <label class="chip"><input type="radio" name="fmt" value="720"><span>720p</span></label>
+      <label class="chip"><input type="radio" name="fmt" value="480"><span>480p</span></label>
+      <label class="chip"><input type="radio" name="fmt" value="360"><span>360p</span></label>
+    </div>
+    <div class="grp"><small>Audio</small>
+      <label class="chip"><input type="radio" name="fmt" value="audio"><span>Original</span></label>
+      <label class="chip"><input type="radio" name="fmt" value="mp3"><span>MP3</span></label>
+      <label class="chip"><input type="radio" name="fmt" value="m4a"><span>M4A</span></label>
+      <label class="chip"><input type="radio" name="fmt" value="opus"><span>Opus</span></label>
+      <label class="chip"><input type="radio" name="fmt" value="wav"><span>WAV</span></label>
+    </div>
+    <div class="grp"><small>No media</small>
+      <label class="chip"><input type="radio" name="fmt" value="none"><span>Extras only</span></label>
+    </div>
+  </div>
+  <div class="opts more" id="more" hidden>
+    <label class="chip"><input type="checkbox" id="playlist"><span>Playlist</span></label>
+    <label class="chip"><input type="checkbox" id="subs"><span>Subtitles</span></label>
+    <label class="chip"><input type="checkbox" id="autosubs"><span>Auto captions</span></label>
+    <span id="langwrap" hidden><input type="text" id="langs" value="en.*" title="Subtitle languages, e.g. en.*,hi" aria-label="Subtitle languages"></span>
+    <label class="chip"><input type="checkbox" id="description"><span>Description</span></label>
+    <label class="chip"><input type="checkbox" id="infojson"><span>Info JSON</span></label>
+    <label class="chip"><input type="checkbox" id="embed"><span>Embed metadata</span></label>
+  </div>
+  <div id="err"></div>
+</form>
+
+<div class="bar">
+  <div class="tabs" id="tabs">
+    <button data-f="all" class="on">All</button>
+    <button data-f="active">Active</button>
+    <button data-f="done">Done</button>
+    <button data-f="failed">Failed</button>
+  </div>
+</div>
+<div id="jobs"></div>
+</main>
+<script>
+const $=s=>document.getElementById(s);
+const OPTS=["format","playlist","subs","autosubs","langs","description","infojson","embed"];
+const FMT={best:"Best",mp4:"MP4",2160:"4K",1440:"1440p",1080:"1080p",720:"720p",480:"480p",360:"360p",audio:"Audio",mp3:"MP3",m4a:"M4A",opus:"Opus",wav:"WAV",none:"Extras"};
+const VID=/\.(mp4|mkv|webm|mov|avi|flv)$/i,AUD=/\.(m4a|mp3|opus|ogg|aac|flac|wav)$/i,IMG=/\.(jpe?g|png|webp)$/i;
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>"&#"+c.charCodeAt(0)+";");
+const size=n=>{for(const u of["B","KB","MB","GB"]){if(n<1024)return(u=="B"?n:n.toFixed(n<10?1:0))+" "+u;n/=1024}return n.toFixed(1)+" TB"};
+const ago=t=>{const s=Date.now()/1000-t;return s<60?"just now":s<3600?Math.floor(s/60)+"m ago":s<86400?Math.floor(s/3600)+"h ago":new Date(t*1000).toLocaleDateString()};
+const host=u=>{try{return new URL(u).hostname.replace(/^www\./,"")}catch(e){return u}};
+const icon=n=>`<svg><use href="#i-${n}"/></svg>`;
+const ACTIVE=["running","queued","interrupted"],FAILED=["error","cancelled"];
+let jobs=[],filter="all",timer,ck={set:false};const openLogs=new Set(),logs={},confirming=new Set();
+
+// --- composer ---
+try{const s=JSON.parse(localStorage.ytw||"{}");OPTS.forEach(k=>{if(k in s){const e=$(k);e.type=="checkbox"?e.checked=s[k]:e.value=s[k]}})}catch(e){}
+const syncLangs=()=>$("langwrap").hidden=!($("subs").checked||$("autosubs").checked);
+const syncCount=()=>{const n=[...$("more").querySelectorAll("input[type=checkbox]")].filter(c=>c.checked).length;$("ocount").textContent=n||""};
+$("more").onchange=()=>{syncLangs();syncCount()};syncLangs();syncCount();
+// two toggle panels; opening one closes the other
+const panel=(btn,p,open)=>{$(p).hidden=!open;$(btn).setAttribute("aria-expanded",open)};
+const setMore=open=>{panel("moreBtn","more",open);if(open)panel("fmtBtn","fmtPanel",false);try{localStorage.ytwMore=open?1:""}catch(e){}};
+$("moreBtn").onclick=()=>setMore($("more").hidden);
+$("fmtBtn").onclick=()=>{const open=$("fmtPanel").hidden;panel("fmtBtn","fmtPanel",open);if(open)setMore(false)};
+try{setMore(!!localStorage.ytwMore)}catch(e){}
+const FMTNAME={best:"Best quality",mp4:"MP4 · best",2160:"4K · 2160p",1440:"1440p",1080:"1080p",720:"720p",480:"480p",360:"360p",audio:"Audio · original",mp3:"Audio · MP3",m4a:"Audio · M4A",opus:"Audio · Opus",wav:"Audio · WAV",none:"Extras only"};
+const syncFmt=()=>{const v=FMTNAME[$("format").value]?$("format").value:"best";$("format").value=v;
+  $("fmtLabel").textContent=FMTNAME[v];for(const r of document.getElementsByName("fmt"))r.checked=r.value==v};
+$("fmtPanel").onchange=e=>{$("format").value=e.target.value;syncFmt();panel("fmtBtn","fmtPanel",false)};
+syncFmt();
+const grow=()=>{const t=$("url");t.style.height="44px";const h=t.scrollHeight+2;t.style.height=Math.min(h,180)+"px";t.style.overflowY=h>180?"auto":"hidden"};
+$("url").oninput=grow;
+$("url").onkeydown=e=>{if(e.key=="Enter"&&(e.ctrlKey||e.metaKey))$("f").requestSubmit()};
+$("f").onsubmit=async e=>{
+  e.preventDefault();$("err").textContent="";
+  const b={url:$("url").value};
+  OPTS.forEach(k=>{const e=$(k);b[k]=e.type=="checkbox"?e.checked:e.value});
+  try{localStorage.ytw=JSON.stringify(Object.fromEntries(OPTS.map(k=>[k,b[k]])))}catch(e){}
+  const r=await fetch("/api/jobs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b)});
+  if(!r.ok){$("err").textContent=(await r.json()).error;return}
+  $("url").value="";grow();refresh();
+};
+$("tabs").onclick=e=>{const b=e.target.closest("button");if(!b)return;filter=b.dataset.f;
+  for(const x of $("tabs").children)x.classList.toggle("on",x==b);render()};
+
+// --- actions (event delegation) ---
+$("jobs").onclick=async e=>{
+  const b=e.target.closest("[data-a]");if(!b)return;
+  const id=b.closest(".job").dataset.id,a=b.dataset.a;
+  if(a=="log"){openLogs.has(id)?openLogs.delete(id):openLogs.add(id);return refresh()}
+  if(a=="dl"){const f=main(jobs.find(j=>j.id==id).files);location.href=furl(id,f.name)+"?dl";return}
+  if(a=="cookies"){setSettings(true);return}
+  if(a=="ask"){confirming.add(id);return render()}
+  if(a=="keep"){confirming.delete(id);return render()}
+  if(a=="delete"){confirming.delete(id);b.closest(".job").classList.add("gone")}
+  await fetch(a=="delete"?`/api/jobs/${id}`:`/api/jobs/${id}/${a}`,{method:a=="delete"?"DELETE":"POST",headers:{"Content-Type":"application/json"},body:"{}"});
+  refresh();
+};
+const furl=(id,n)=>`/f/${id}/${encodeURIComponent(n)}`;
+const main=fs=>fs.reduce((a,b)=>b.size>a.size?b:a);
+
+// --- rendering ---
+function parseProg(p){ // "[dl]  42.1% of  118.62MiB at  8.53MiB/s ETA 00:09"
+  const m=/^\[dl\]\s*([\d.]+)%(?:\s+of\s+~?\s*(\S+))?(?:\s+at\s+(\S+))?(?:\s+ETA\s+(\S+))?/.exec(p||"");
+  if(!m)return null;
+  const ok=v=>v&&!/^N\/?A$|Unknown/i.test(v);
+  return{pct:+m[1],txt:[ok(m[2])&&m[2],ok(m[3])&&m[3],ok(m[4])&&"ETA "+m[4]].filter(Boolean).join(" · ")};
+}
+function card(j){
+  const thumb=j.files.find(f=>IMG.test(f.name)),media=j.files.find(f=>VID.test(f.name)||AUD.test(f.name));
+  const ph=j.opts.format in{audio:1,mp3:1,m4a:1,opus:1,wav:1}?"aud":j.opts.format=="none"?"doc":"vid";
+  const active=j.status=="running"||j.status=="queued";
+  const p=j.status=="running"&&parseProg(j.progress);
+  let prog="";
+  if(j.status=="running")prog=p?`<div class="prog"><i style="width:${p.pct}%"></i></div><div class="stat">${p.pct.toFixed(1)}%${p.txt?" · "+esc(p.txt):""}</div>`
+    :`<div class="prog ind"><i></i></div><div class="stat">${esc((j.progress||"Starting…").replace(/^\[\w+\]\s*/,""))}</div>`;
+  else if(j.status=="queued")prog=`<div class="stat">Waiting for a free slot…</div>`;
+  else if(j.status=="error")prog=`<div class="stat err">${esc(j.progress)}</div>`+
+    (/cookies|not a bot|sign in|logged-in/i.test(j.progress)?`<div><button class="btn" data-a="cookies">${icon("set")}${ck.set?"Update cookies":"Add cookies"}</button></div>`:"");
+  const files=j.files.map(f=>{const ext=f.name.split(".").pop().toUpperCase().slice(0,5);
+    return`<a class="file" href="${furl(j.id,f.name)}" target="_blank" title="${esc(f.name)}"><b>${esc(ext)}</b><small>${size(f.size)}</small></a>`}).join("");
+  return`<div class="thumb"${thumb?` style="background-image:url('${furl(j.id,thumb.name)}')"`:""}>${thumb?"":icon(ph)}</div>
+  <div class="body">
+    <div class="head"><div class="title${j.title?"":" pending"}">${esc(j.title||"Fetching info…")}</div>
+      <span class="pill s-${j.status}">${j.status}</span></div>
+    <div class="meta"><a href="${esc(j.url)}" target="_blank" rel="noreferrer">${esc(host(j.url))}</a><span>${FMT[j.opts.format]||"Best"}</span>${j.count>1?`<span>${j.count} items</span>`:""}<span>${ago(j.created)}</span></div>
+    ${prog}
+    ${files?`<div class="files">${files}</div>`:""}
+    ${confirming.has(j.id)?`<div class="acts confirm">
+      <span class="q">${icon("del")}Delete this download and its files?</span><span class="sp"></span>
+      <button class="btn ghost" data-a="keep">Keep</button>
+      <button class="btn danger" data-a="delete">Delete</button>
+    </div>`:`<div class="acts">
+      ${active?`<button class="btn" data-a="cancel">${icon("x")}Cancel</button>`
+        :j.status=="done"&&j.files.length?`<button class="btn go" data-a="dl">${icon("dl")}Download</button>`
+        :`<button class="btn" data-a="retry">${icon("re")}Retry</button>`}
+      <span class="sp"></span>
+      <button class="btn ghost" data-a="log" title="Log">${icon("log")}${openLogs.has(j.id)?"Hide log":"Log"}</button>
+      <button class="btn ghost del" data-a="ask" title="Delete">${icon("del")}</button>
+    </div>`}
+    ${openLogs.has(j.id)&&j.id in logs?`<pre>${esc(logs[j.id])}</pre>`:""}
+  </div>`;
+}
+function render(){
+  const n={active:0,done:0,failed:0};
+  jobs.forEach(j=>ACTIVE.includes(j.status)?n.active++:FAILED.includes(j.status)?n.failed++:n.done++);
+  for(const b of $("tabs").children){const k=b.dataset.f;b.innerHTML=b.textContent.replace(/\d+$/,"").trim()+(k!="all"&&n[k]?`<b>${n[k]}</b>`:"")}
+  $("stats").textContent=n.active?`${n.active} active`:"";
+  document.title=n.active?`(${n.active}) yt-web`:"yt-web";
+  const list=jobs.filter(j=>filter=="all"||(filter=="active"?ACTIVE:filter=="failed"?FAILED:["done"]).includes(j.status));
+  const box=$("jobs");
+  if(!list.length){box.innerHTML=`<div class="empty">${icon("dl")}<div>${jobs.length?"Nothing here.":"No downloads yet. Paste a link above."}</div></div>`;return}
+  box.querySelector(".empty")?.remove();
+  // keyed update: only touch cards whose HTML changed (no flicker, thumbnails stay put)
+  const keep=new Set(list.map(j=>j.id));
+  for(const el of [...box.children])if(!keep.has(el.dataset.id))el.remove();
+  let prev=null;
+  for(const j of list){
+    let el=box.querySelector(`[data-id="${j.id}"]`);const html=card(j);
+    if(!el){el=document.createElement("div");el.className="card job";el.dataset.id=j.id}
+    if(el._h!==html){el.innerHTML=html;el._h=html;const pre=el.querySelector("pre");if(pre)pre.scrollTop=pre.scrollHeight}
+    const want=prev?prev.nextSibling:box.firstChild;if(el!==want)box.insertBefore(el,want);
+    prev=el;
+  }
+}
+async function refresh(){
+  clearTimeout(timer);
+  try{jobs=await (await fetch("/api/jobs")).json()}catch(e){}
+  await Promise.all([...openLogs].filter(id=>jobs.some(j=>j.id==id)).map(async id=>{
+    try{logs[id]=await (await fetch(`/api/jobs/${id}/log`)).text()}catch(e){}}));
+  render();
+  const busy=jobs.some(j=>j.status=="running"||j.status=="queued");
+  if(!document.hidden)timer=setTimeout(refresh,busy?1500:10000);
+}
+document.addEventListener("keydown",e=>{if(e.key=="Escape"&&confirming.size){confirming.clear();render()}});
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)refresh()});
+// --- settings / cookies ---
+const setSettings=open=>{$("settings").hidden=!open;$("setBtn").setAttribute("aria-expanded",open);if(open){loadCookies();$("settings").scrollIntoView({block:"nearest"})}};
+$("setBtn").onclick=()=>setSettings($("settings").hidden);
+function showCookies(c){
+  ck=c;$("setBtn").classList.toggle("on",!!c.set);
+  const el=$("ckStatus");el.classList.toggle("on",!!c.set);
+  el.innerHTML=c.set?`<span class="dot"></span><span class="txt">Using ${c.count} cookies · ${esc(c.domains.join(", "))}${c.more?` +${c.more}`:""} <small>· updated ${ago(c.updated)}</small></span><button type="button" class="btn ghost del" id="ckDel">Remove</button>`
+    :`<span class="dot"></span><span class="txt">No cookies set</span>`;
+  const d=$("ckDel");if(d)d.onclick=async()=>{showCookies(await (await fetch("/api/cookies",{method:"DELETE"})).json());ckMsg("Removed","ok");render()};
+}
+const ckMsg=(t,c="")=>{const m=$("ckMsg");m.textContent=t;m.className="msg "+c};
+async function loadCookies(){try{showCookies(await (await fetch("/api/cookies")).json())}catch(e){}}
+$("ckFile").onchange=async e=>{const f=e.target.files[0];if(!f)return;
+  if(f.size>5e6)return ckMsg("File too large (max 5 MB)","err");
+  $("ckPaste").value=await f.text();ckMsg(f.name+" loaded — click Save");e.target.value=""};
+$("ckSave").onclick=async()=>{
+  const text=$("ckPaste").value.trim();if(!text)return ckMsg("Paste or choose a cookies.txt first","err");
+  ckMsg("Saving…");
+  const r=await fetch("/api/cookies",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text})});
+  const j=await r.json();
+  if(!r.ok)return ckMsg(j.error,"err");
+  $("ckPaste").value="";showCookies(j);ckMsg("Saved — new downloads will use these cookies. Retry failed ones.","ok");render();
+};
+loadCookies();
+refresh();
+</script>
+</body>
+</html>
