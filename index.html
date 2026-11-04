@@ -32,6 +32,16 @@ header h1{font-size:18px;margin:0;letter-spacing:-.01em}
 .settings h2{font-size:14px;margin:0 0 4px;display:flex;align-items:center;gap:8px}
 .settings p{margin:0 0 10px;color:var(--mut);font-size:13px}
 .settings a{color:var(--acc)}
+.sw{display:flex;align-items:center;gap:12px;background:var(--soft);border-radius:8px;padding:10px 12px;cursor:pointer;margin:8px 0 0}
+.sw .txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;font-size:13px}
+.sw small{color:var(--mut);font-size:12.5px}
+.sw input{position:absolute;opacity:0;pointer-events:none}
+.sw i{flex:none;width:38px;height:22px;border-radius:99px;background:var(--bd);position:relative;transition:background .15s}
+.sw i::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform .15s}
+.sw input:checked+i{background:var(--ok)}
+.sw input:checked+i::after{transform:translateX(16px)}
+.sw input:focus-visible+i{outline:2px solid var(--acc);outline-offset:2px}
+.settings hr{border:0;border-top:1px solid var(--bd);margin:14px 0}
 .ck{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--soft);border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:13px}
 .ck .dot{width:8px;height:8px;border-radius:50%;background:var(--mut);flex:none}
 .ck.on .dot{background:var(--ok)}
@@ -165,6 +175,12 @@ pre{margin:4px 0 0;white-space:pre-wrap;word-break:break-all;font:11.5px/1.5 ui-
 </header>
 
 <section class="card settings" id="settings" hidden>
+  <h2>Network</h2>
+  <label class="sw">
+    <span class="txt"><b>Force IPv4</b><small>Run yt-dlp with <code>-4</code>. Helps when IPv6 is slow or blocked by YouTube. Applies to new and retried downloads.</small></span>
+    <input type="checkbox" id="ipv4"><i></i>
+  </label>
+  <hr>
   <h2>YouTube cookies</h2>
   <p>If YouTube says “Sign in to confirm you’re not a bot”, upload a <code>cookies.txt</code> from a logged-in browser. Every download will use it.</p>
   <div class="ck" id="ckStatus"><span class="dot"></span><span class="txt">Checking…</span></div>
@@ -371,7 +387,7 @@ async function refresh(){
 document.addEventListener("keydown",e=>{if(e.key=="Escape"&&confirming.size){confirming.clear();render()}});
 document.addEventListener("visibilitychange",()=>{if(!document.hidden)refresh()});
 // --- settings / cookies ---
-const setSettings=open=>{$("settings").hidden=!open;$("setBtn").setAttribute("aria-expanded",open);if(open){loadCookies();$("settings").scrollIntoView({block:"nearest"})}};
+const setSettings=open=>{$("settings").hidden=!open;$("setBtn").setAttribute("aria-expanded",open);if(open){loadCookies();loadSettings();$("settings").scrollIntoView({block:"nearest"})}};
 $("setBtn").onclick=()=>setSettings($("settings").hidden);
 function showCookies(c){
   ck=c;$("setBtn").classList.toggle("on",!!c.set);
@@ -381,6 +397,10 @@ function showCookies(c){
   const d=$("ckDel");if(d)d.onclick=async()=>{showCookies(await (await fetch("/api/cookies",{method:"DELETE"})).json());ckMsg("Removed","ok");render()};
 }
 const ckMsg=(t,c="")=>{const m=$("ckMsg");m.textContent=t;m.className="msg "+c};
+async function loadSettings(){try{$("ipv4").checked=(await (await fetch("/api/settings")).json()).ipv4}catch(e){}}
+$("ipv4").onchange=async e=>{
+  try{const r=await fetch("/api/settings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({ipv4:e.target.checked})});
+    e.target.checked=(await r.json()).ipv4}catch(err){e.target.checked=!e.target.checked}};
 async function loadCookies(){try{showCookies(await (await fetch("/api/cookies")).json())}catch(e){}}
 $("ckFile").onchange=async e=>{const f=e.target.files[0];if(!f)return;
   if(f.size>5e6)return ckMsg("File too large (max 5 MB)","err");

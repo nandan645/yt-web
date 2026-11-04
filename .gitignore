@@ -6,5 +6,6 @@ __pycache__/
 # Runtime data
 downloads/
 cookies.txt
+settings.json
 *.log
 *.pid

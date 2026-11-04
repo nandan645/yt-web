@@ -16,6 +16,8 @@ MAX_JOBS = int(os.environ.get("MAX_JOBS", "2"))
 BIN = os.path.dirname(sys.executable)  # venv bin: yt-dlp, deno, ffmpeg
 # Netscape cookies.txt used for every job (e.g. to pass YouTube's bot check). Never served over HTTP.
 COOKIES = os.path.abspath(os.environ.get("COOKIES_FILE", os.path.join(HERE, "cookies.txt")))
+SETTINGS = os.path.abspath(os.environ.get("SETTINGS_FILE", os.path.join(HERE, "settings.json")))
+DEFAULTS = {"ipv4": True}  # force IPv4 (-4): many hosts have flaky/blocked IPv6 to YouTube
 JOB_COOKIES = ".cookies.txt"  # per-job private copy; yt-dlp rewrites it, removed when the job ends
 INTERNAL = {"job.json", "log.txt", "rc", "pid", "cancelled", "title.txt"}
 PARTIAL = re.compile(r"\.(part|ytdl|temp)$|\.part-Frag\d+|\.f\d+\.\w+$")
@@ -87,6 +89,12 @@ def cookies_info():
             "updated": os.path.getmtime(COOKIES)}
 
 
+def get_settings():
+    try: saved = json.loads(read(SETTINGS) or "{}")
+    except ValueError: saved = {}
+    return {k: type(v)(saved.get(k, v)) for k, v in DEFAULTS.items()}
+
+
 def write_private(path, text):
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w", encoding="utf-8") as f: f.write(text)
@@ -153,6 +161,7 @@ def start(jid):
     d = jdir(jid)
     meta = json.loads(read(os.path.join(d, "job.json")))
     cmd = [os.path.join(BIN, "yt-dlp")] + build_args(meta["opts"])
+    if get_settings()["ipv4"]: cmd.append("-4")
     text = read(COOKIES)
     if text:
         write_private(os.path.join(d, JOB_COOKIES), text)
@@ -230,6 +239,8 @@ class H(BaseHTTPRequestHandler):
             return self.send(200, read(os.path.join(HERE, "index.html")).encode(), "text/html; charset=utf-8")
         if p == ["api", "cookies"]:
             return self.send(200, cookies_info())
+        if p == ["api", "settings"]:
+            return self.send(200, get_settings())
         if p == ["api", "jobs"]:
             jobs = []
             for i in all_ids():
@@ -296,6 +307,12 @@ class H(BaseHTTPRequestHandler):
         # JSON-only: other sites can't send this cross-origin without a CORS preflight (we never allow one)
         if not self.headers.get("Content-Type", "").startswith("application/json"):
             return self.send(415, {"error": "expected application/json"})
+        if p == ["api", "settings"]:
+            new = get_settings()
+            for k, v in self.body().items():
+                if k in DEFAULTS and isinstance(v, type(DEFAULTS[k])): new[k] = v
+            write_private(SETTINGS, json.dumps(new))
+            return self.send(200, new)
         if p == ["api", "cookies"]:
             text = str(self.body(5_000_000).get("text", "")).replace("\r\n", "\n")
             if not any(True for _ in cookie_rows(text)):
